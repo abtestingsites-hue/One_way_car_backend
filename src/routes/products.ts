@@ -1,0 +1,117 @@
+import { Router } from 'express';
+import { supabase } from '../database';
+
+const router = Router();
+
+// GET all products
+router.get('/', async (req, res) => {
+    try {
+        const { data: products, error } = await supabase
+            .from('billing_products')
+            .select('*');
+
+        if (error) throw error;
+        res.json(products);
+    } catch (error) {
+        console.error('Fetch products error:', error);
+        res.status(500).json({ error: 'Failed to fetch products' });
+    }
+});
+
+// POST create product
+router.post('/', async (req, res) => {
+    try {
+        const { name, productId, image, category, quantity, inStock, unit, basePrice, gstRate, hsnCode, warrantyMonths } = req.body;
+        
+        const { data: product, error } = await supabase
+            .from('billing_products')
+            .insert({
+                name,
+                productId,
+                image,
+                category,
+                quantity: quantity !== undefined ? Number(quantity) : 0,
+                inStock: inStock !== undefined ? inStock : true,
+                unit,
+                basePrice: Number(basePrice),
+                gstRate: Number(gstRate),
+                hsnCode,
+                warrantyMonths: warrantyMonths !== undefined ? Number(warrantyMonths) : 12
+            })
+            .select()
+            .single();
+
+        if (error) throw error;
+        res.status(201).json(product);
+    } catch (error) {
+        console.error('Create product error:', error);
+        res.status(500).json({ error: 'Failed to create product' });
+    }
+});
+
+// PUT update product
+router.put('/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name, productId, image, category, quantity, inStock, unit, basePrice, gstRate, hsnCode, warrantyMonths } = req.body;
+
+        // Auto-update inStock based on quantity if not explicitly provided
+        let stockStatus = inStock;
+        if (quantity !== undefined) {
+            stockStatus = Number(quantity) > 0;
+        }
+
+        const { data: product, error } = await supabase
+            .from('billing_products')
+            .update({
+                name,
+                productId,
+                image,
+                category,
+                quantity: quantity !== undefined ? Number(quantity) : undefined,
+                inStock: stockStatus,
+                unit,
+                basePrice: basePrice !== undefined ? Number(basePrice) : undefined,
+                gstRate: gstRate !== undefined ? Number(gstRate) : undefined,
+                hsnCode,
+                warrantyMonths: warrantyMonths !== undefined ? Number(warrantyMonths) : undefined,
+                updatedAt: new Date()
+            })
+            .eq('_id', id)
+            .select()
+            .maybeSingle();
+
+        if (error) throw error;
+        if (!product) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+        res.json(product);
+    } catch (error) {
+        console.error('Update product error:', error);
+        res.status(500).json({ error: 'Failed to update product' });
+    }
+});
+
+// DELETE product
+router.delete('/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        const { data: data, error } = await supabase
+            .from('billing_products')
+            .delete()
+            .eq('_id', id)
+            .select();
+
+        if (error) throw error;
+        if (!data || data.length === 0) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+        res.json({ message: 'Product deleted successfully' });
+    } catch (error) {
+        console.error('Delete product error:', error);
+        res.status(500).json({ error: 'Failed to delete product' });
+    }
+});
+
+export default router;
